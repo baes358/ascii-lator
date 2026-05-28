@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+    <title>ascii-lator</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+
+    <div id="drop-hint" class="drop-hint">
+      <div class="drop-hint__inner">
+        <div class="drop-hint__title">drop a photo</div>
+        <div class="drop-hint__sub">or click to upload — jpg / png</div>
+      </div>
+      <input type="file" id="file-input" accept="image/*" />
+    </div>
+
+    <aside class="panel" id="panel">
+      <header class="panel__head">
+        <span class="panel__title">ascii-lator</span>
+        <button class="panel__toggle" id="panel-toggle" aria-label="toggle panel">_</button>
+      </header>
+      <div class="panel__body" id="panel-body">
+        <label class="ctl">
+          <span class="ctl__label">density</span>
+          <input type="range" id="ctl-density" min="6000" max="30000" step="1000" value="20000" />
+          <span class="ctl__value" id="ctl-density-val">20k</span>
+        </label>
+
+        <label class="ctl">
+          <span class="ctl__label">color</span>
+          <select id="ctl-color">
+            <option value="original">original</option>
+            <option value="mono">monochrome</option>
+            <option value="accent">accent</option>
+          </select>
+        </label>
+
+        <label class="ctl ctl--accent" id="ctl-accent-wrap">
+          <span class="ctl__label">accent</span>
+          <input type="color" id="ctl-accent" value="#7CFFB2" />
+        </label>
+
+        <label class="ctl">
+          <span class="ctl__label">ramp</span>
+          <select id="ctl-ramp">
+            <option value=" .:-=+*#%@">classic</option>
+            <option value=" .'`,:;Il!i&gt;&lt;~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&amp;8%B@$">long</option>
+            <option value=" .oO@">blocky</option>
+            <option value=" .-+*#">minimal</option>
+            <option value=" ░▒▓█">blocks</option>
+          </select>
+        </label>
+
+        <label class="ctl">
+          <span class="ctl__label">photo</span>
+          <button class="ctl__btn" id="ctl-upload">upload</button>
+        </label>
+
+        <div class="ctl ctl--readout">
+          <span class="ctl__label">particles</span>
+          <span class="ctl__value" id="ctl-count">0</span>
+        </div>
+
+        <div class="ctl ctl--readout">
+          <span class="ctl__label">fps</span>
+          <span class="ctl__value" id="ctl-fps">—</span>
+        </div>
+
+        <div class="panel__hint">click to burst · drag cursor to push</div>
+      </div>
+    </aside>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
