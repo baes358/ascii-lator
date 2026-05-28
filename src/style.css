@@ -259,6 +259,13 @@ html, body {
   color: var(--accent);
 }
 
+.ctl__toggle[aria-pressed='true'] {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(124, 255, 178, 0.45);
+}
+
 .ctl select:focus,
 .ctl input:focus,
 .ctl__btn:focus {

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { buildAtlas } from './glyphAtlas.js';
 import { sampleImage, gridForTarget } from './imageSampler.js';
 import { createSystem, PHYSICS } from './particleSystem.js';
+import { createPhotoBackground } from './photoBackground.js';
 import { createInteraction } from './interaction.js';
 import { createControls } from './controls.js';
 
@@ -17,6 +18,14 @@ let currentDensity = 20000;
 let currentColorMode = COLOR_MODES.original;
 let currentAccent = '#7CFFB2';
 let atlas = null;
+
+// --- cycle mode (photo ↔ ASCII cross-fade loop) ---
+let cycleMode = false;
+let cycleClock = 0; // seconds since cycle started
+const CYCLE = {
+  hold: 0.9,        // time held at each end (photo only / ascii only)
+  transition: 1.6,  // cross-fade duration each direction
+};
 
 // --- three.js setup ---
 const canvas = document.getElementById('stage');
@@ -55,6 +64,11 @@ const system = createSystem({
 system.setColorMode(currentColorMode, currentAccent);
 scene.add(system.mesh);
 
+// --- background photo plane (only visible during cycle mode) ---
+const background = createPhotoBackground();
+background.resize(window.innerWidth, window.innerHeight);
+scene.add(background.mesh);
+
 // --- interaction ---
 const interaction = createInteraction(canvas, system);
 
@@ -64,6 +78,15 @@ const controls = createControls({
   initialColorMode: currentColorMode,
   initialAccent: currentAccent,
   initialRamp: currentRamp,
+  initialCycle: cycleMode,
+  onCycle: (on) => {
+    cycleMode = on;
+    cycleClock = 0;
+    if (!on) {
+      background.setOpacity(0);
+      system.setOpacity(1);
+    }
+  },
   onDensity: (n) => { currentDensity = n; resampleCurrent(); },
   onColorMode: (mode) => {
     currentColorMode = mode;
@@ -122,6 +145,7 @@ function loadFile(file) {
   img.onload = () => {
     URL.revokeObjectURL(url);
     currentImage = img;
+    background.setImage(img);
     dropHint.classList.add('is-hidden');
     resampleCurrent();
   };
@@ -169,6 +193,7 @@ function buildDemoImage() {
   return c;
 }
 currentImage = buildDemoImage();
+background.setImage(currentImage);
 resampleCurrent();
 
 // --- resize ---
@@ -178,8 +203,25 @@ window.addEventListener('resize', () => {
   resizeTimer = setTimeout(() => {
     applyCameraSize();
     system.resize({ width: window.innerWidth, height: window.innerHeight });
+    background.resize(window.innerWidth, window.innerHeight);
   }, 60);
 });
+
+// --- cycle envelope: photo (0) → ASCII (1) → photo (0) → ... ---
+// segments: [hold-photo, fade-up, hold-ascii, fade-down], easing applied
+function cycleAsciiOpacity(t) {
+  const { hold, transition } = CYCLE;
+  const period = (hold + transition) * 2;
+  const phase = t % period;
+  if (phase < hold) return 0;
+  if (phase < hold + transition) return ease((phase - hold) / transition);
+  if (phase < hold * 2 + transition) return 1;
+  return 1 - ease((phase - hold * 2 - transition) / transition);
+}
+function ease(x) {
+  // smoothstep-ish ease in/out
+  return x * x * (3 - 2 * x);
+}
 
 // --- raf loop with visibility pause ---
 let last = performance.now();
@@ -190,6 +232,13 @@ function frame(now) {
   if (!running) return;
   const dt = Math.min((now - last) / 1000, 1 / 30);
   last = now;
+
+  if (cycleMode) {
+    cycleClock += dt;
+    const ascii = cycleAsciiOpacity(cycleClock);
+    background.setOpacity(1 - ascii);
+    system.setOpacity(ascii);
+  }
 
   system.update(dt, interaction.mouse);
   renderer.render(scene, camera);

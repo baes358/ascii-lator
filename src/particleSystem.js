@@ -80,6 +80,7 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
     uColorMode: { value: 0.0 },
     uAccent:    { value: new THREE.Color('#7CFFB2') },
     uIntensity: { value: 1.05 },
+    uOpacity:   { value: 1.0 },
   };
 
   const material = new THREE.ShaderMaterial({
@@ -164,6 +165,10 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
 
   function setIntensity(v) {
     uniforms.uIntensity.value = v;
+  }
+
+  function setOpacity(v) {
+    uniforms.uOpacity.value = v;
   }
 
   function resize(v) {
@@ -374,6 +379,7 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
     setAtlas,
     setColorMode,
     setIntensity,
+    setOpacity,
     resize,
     update,
     pulse,

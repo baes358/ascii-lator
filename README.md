@@ -25,6 +25,7 @@ panel.
 | color       | `original` samples photo color · `monochrome` uses luminance · `accent` tints by lum |
 | accent      | hex color used in accent mode                                    |
 | ramp        | the character set, ordered light → heavy                         |
+| cycle       | loops the view between the original photo and the ASCII-fied render (cross-fade, ease in/out, holds at each end) |
 | cursor      | push particles away within `repelRadius`                         |
 | click / tap | emits concentric ring **pulses** — particles in the band light up (brighten + densest-glyph swap + small outward nudge) so the ring is visible *as ASCII*, then settle back |
 

@@ -17,6 +17,7 @@ export function createControls(opts) {
   const accentWrap = document.getElementById('ctl-accent-wrap');
   const rampSel = document.getElementById('ctl-ramp');
   const uploadBtn = document.getElementById('ctl-upload');
+  const cycleBtn = document.getElementById('ctl-cycle');
   const fileInput = document.getElementById('file-input');
   const countOut = document.getElementById('ctl-count');
   const fpsOut = document.getElementById('ctl-fps');
@@ -62,6 +63,16 @@ export function createControls(opts) {
     if (f) opts.onUpload(f);
     fileInput.value = '';
   });
+
+  let cycleOn = !!opts.initialCycle;
+  setCycle(cycleOn);
+  cycleBtn.addEventListener('click', () => setCycle(!cycleOn));
+  function setCycle(v) {
+    cycleOn = v;
+    cycleBtn.textContent = v ? 'on' : 'off';
+    cycleBtn.setAttribute('aria-pressed', v ? 'true' : 'false');
+    opts.onCycle(v);
+  }
 
   toggle.addEventListener('click', () => {
     panel.classList.toggle('is-collapsed');
