@@ -26,7 +26,7 @@ panel.
 | accent      | hex color used in accent mode                                    |
 | ramp        | the character set, ordered light → heavy                         |
 | cursor      | push particles away within `repelRadius`                         |
-| click / tap | radial burst that settles back to home                           |
+| click / tap | emits concentric ring **pulses** — particles in the band light up (brighten + densest-glyph swap + small outward nudge) so the ring is visible *as ASCII*, then settle back |
 
 ## Architecture
 
@@ -34,11 +34,11 @@ panel.
 src/
   glyphAtlas.js     — packs ramp into a NearestFilter atlas texture
   imageSampler.js   — decode → downscale grid → luminance → flat typed arrays
-  particleSystem.js — one InstancedMesh, CPU spring/repel/burst, no per-frame allocs
+  particleSystem.js — one InstancedMesh, CPU spring/repel/ripple, no per-frame allocs
   shaders/
     particle.vert   — atlas UV from aGlyph, applies aOffset, color modes
     particle.frag   — atlas sample, additive emit on dark background
-  interaction.js    — pointer → normalized image space, click bursts
+  interaction.js    — pointer → normalized image space, click pulses
   controls.js       — panel UI wiring
   main.js           — wiring + RAF loop + resize + file load
 ```
@@ -70,8 +70,13 @@ All in `src/particleSystem.js` (`PHYSICS` export):
 | damping        | 6.5     | velocity damping (higher = settles faster)         |
 | repelRadius    | 0.22    | mouse push radius (normalized — image half = 1)    |
 | repelStrength  | 2.2     | mouse push force                                   |
-| burstRadius    | 1.6     | click burst radius                                 |
-| burstStrength  | 6.0     | click burst impulse                                |
+| rippleSpeed    | 1.55    | pulse ring expansion (normalized / sec)            |
+| rippleWidth    | 0.10    | Gaussian band thickness of the ring                |
+| rippleStrength | 2.5     | outward nudge at the ring crest (low — glyph swap carries the read) |
+| rippleLifetime | 1.6     | seconds before a ripple fades and recycles         |
+| ripplePerClick | 2       | concentric pulses per click                        |
+| rippleStagger  | 0.14    | delay between concentric pulses                    |
+| pulseDecayRate | 3.2     | per-particle excitation half-life (~0.22s)         |
 | scatterMin/Max | 1.6/3.2 | fly-in scatter shell                               |
 | maxSpeed       | 12.0    | velocity clamp to keep things stable               |
 

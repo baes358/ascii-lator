@@ -29,7 +29,7 @@ export function createInteraction(canvas, system) {
     // ignore right-clicks etc
     if (e.button !== undefined && e.button !== 0) return;
     const m = toNormalized(e.clientX, e.clientY);
-    system.burst(m.x, m.y);
+    system.pulse(m.x, m.y);
   }
 
   function onTouch(e) {

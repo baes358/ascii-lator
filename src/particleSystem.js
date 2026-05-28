@@ -7,16 +7,23 @@ import fragSrc from './shaders/particle.frag?raw';
  * normalized image-space units (image's longer axis spans 2 units).
  */
 export const PHYSICS = {
-  stiffness: 55,        // spring pull toward home
-  damping: 6.5,         // velocity damping
-  repelRadius: 0.22,    // mouse push radius (normalized)
-  repelStrength: 2.2,   // mouse push force
-  burstRadius: 1.6,     // click burst radius (normalized; large = global)
-  burstStrength: 6.0,   // click burst force
-  scatterMin: 1.6,      // fly-in scatter inner radius
-  scatterMax: 3.2,      // fly-in scatter outer radius
-  maxSpeed: 12.0,       // velocity clamp
+  stiffness: 55,         // spring pull toward home
+  damping: 6.5,          // velocity damping
+  repelRadius: 0.22,     // mouse push radius (normalized)
+  repelStrength: 2.2,    // mouse push force
+  rippleSpeed: 1.55,     // pulse-ring expansion (normalized units / sec)
+  rippleWidth: 0.10,     // ring band thickness (Gaussian sigma)
+  rippleStrength: 2.5,   // outward nudge at the ring crest (small — glyph swap carries the read)
+  rippleLifetime: 1.6,   // seconds before a ripple fades & is recycled
+  ripplePerClick: 2,     // staggered concentric pulses per click
+  rippleStagger: 0.14,   // delay between concentric pulses (sec)
+  pulseDecayRate: 3.2,   // per-particle excitation half-life ≈ 0.22s
+  scatterMin: 1.6,       // fly-in scatter inner radius
+  scatterMax: 3.2,       // fly-in scatter outer radius
+  maxSpeed: 12.0,        // velocity clamp
 };
+
+export const MAX_RIPPLES = 8;
 
 /**
  * createSystem({ atlas, maxParticles, viewport })
@@ -26,7 +33,9 @@ export const PHYSICS = {
  *   .setColorMode(mode, accent) 0|1|2 + THREE.Color
  *   .resize(viewport)          recompute world scaling
  *   .update(dt, mouse)         CPU physics tick; writes aOffset
- *   .burst(x, y)               radial impulse at normalized (x,y)
+ *   .pulse(x, y)               emit a ring ripple at normalized (x,y)
+ *   .getActiveRipples(out)     fills `out` (Vector4[]) with (cx, cy, radius, intensity)
+ *   .getScale()                normalized → world-pixel scalar (for overlays)
  *   .mesh                      the InstancedMesh-equivalent to add to scene
  */
 export function createSystem({ atlas, maxParticles = 30000, viewport }) {
@@ -42,18 +51,24 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
   const offsets = new Float32Array(maxParticles * 2);
   const velocities = new Float32Array(maxParticles * 2);
   const colors = new Float32Array(maxParticles * 3);
-  const glyphs = new Float32Array(maxParticles);
+  const glyphs = new Float32Array(maxParticles);        // current glyph (live)
+  const glyphsBase = new Float32Array(maxParticles);    // glyph from image sample
+  const pulses = new Float32Array(maxParticles);        // 0..1 excitation per particle
 
   const aHome = new THREE.InstancedBufferAttribute(homes, 2);
   const aOffset = new THREE.InstancedBufferAttribute(offsets, 2);
   aOffset.setUsage(THREE.DynamicDrawUsage);
   const aColor = new THREE.InstancedBufferAttribute(colors, 3);
   const aGlyph = new THREE.InstancedBufferAttribute(glyphs, 1);
+  aGlyph.setUsage(THREE.DynamicDrawUsage);
+  const aPulse = new THREE.InstancedBufferAttribute(pulses, 1);
+  aPulse.setUsage(THREE.DynamicDrawUsage);
 
   geometry.setAttribute('aHome', aHome);
   geometry.setAttribute('aOffset', aOffset);
   geometry.setAttribute('aColor', aColor);
   geometry.setAttribute('aGlyph', aGlyph);
+  geometry.setAttribute('aPulse', aPulse);
 
   // --- material ---
   const uniforms = {
@@ -87,6 +102,8 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
   let gridH = 1;
   let viewW = viewport.width;
   let viewH = viewport.height;
+  let atlasGlyphCount = atlas.glyphCount;
+  let pulseDirty = false; // true while any aPulse/aGlyph is non-default
 
   function applyScale() {
     // longer axis of normalized space (±1) → fit into viewport keeping aspect
@@ -109,6 +126,7 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
     homes.set(gridData.homes.subarray(0, n * 2));
     colors.set(gridData.colors.subarray(0, n * 3));
     glyphs.set(gridData.glyphs.subarray(0, n));
+    glyphsBase.set(gridData.glyphs.subarray(0, n));
 
     // scatter initial offsets so particles fly in
     const { scatterMin, scatterMax } = PHYSICS;
@@ -119,6 +137,7 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
       offsets[i * 2 + 1] = Math.sin(a) * r;
       velocities[i * 2] = 0;
       velocities[i * 2 + 1] = 0;
+      pulses[i] = 0;
     }
 
     geometry.instanceCount = n;
@@ -126,6 +145,7 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
     aColor.needsUpdate = true;
     aGlyph.needsUpdate = true;
     aOffset.needsUpdate = true;
+    aPulse.needsUpdate = true;
 
     applyScale();
   }
@@ -134,6 +154,7 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
     uniforms.uAtlas.value = newAtlas.texture;
     uniforms.uCols.value = newAtlas.cols;
     uniforms.uRows.value = newAtlas.rows;
+    atlasGlyphCount = newAtlas.glyphCount;
   }
 
   function setColorMode(mode, accentColor) {
@@ -151,34 +172,73 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
     applyScale();
   }
 
-  function burst(bx, by, strength = PHYSICS.burstStrength) {
-    const r = PHYSICS.burstRadius;
-    const r2 = r * r;
-    for (let i = 0; i < count; i++) {
-      const ix = i * 2, iy = ix + 1;
-      const px = homes[ix] + offsets[ix];
-      const py = homes[iy] + offsets[iy];
-      const dx = px - bx;
-      const dy = py - by;
-      const d2 = dx * dx + dy * dy;
-      if (d2 < r2) {
-        const d = Math.sqrt(d2) || 0.0001;
-        const f = strength * (1 - d / r);
-        velocities[ix] += (dx / d) * f;
-        velocities[iy] += (dy / d) * f;
+  // --- ripple pool (pre-allocated, no per-frame alloc) ---
+  const ripples = new Array(MAX_RIPPLES);
+  for (let i = 0; i < MAX_RIPPLES; i++) {
+    ripples[i] = { active: false, cx: 0, cy: 0, age: 0 };
+  }
+  // flat scratch buffer: per active ripple → cx, cy, radius, intensity
+  const rippleScratch = new Float32Array(MAX_RIPPLES * 4);
+  let activeRippleCount = 0;
+
+  function emitOne(cx, cy, age) {
+    let slot = null;
+    for (let i = 0; i < MAX_RIPPLES; i++) {
+      if (!ripples[i].active) { slot = ripples[i]; break; }
+    }
+    if (!slot) {
+      // recycle the ripple closest to death (largest age)
+      slot = ripples[0];
+      for (let i = 1; i < MAX_RIPPLES; i++) {
+        if (ripples[i].age > slot.age) slot = ripples[i];
       }
     }
+    slot.active = true;
+    slot.cx = cx;
+    slot.cy = cy;
+    slot.age = age; // negative age = waiting (staggered concentric pulses)
+  }
+
+  function pulse(cx, cy) {
+    const n = PHYSICS.ripplePerClick;
+    const stagger = PHYSICS.rippleStagger;
+    for (let i = 0; i < n; i++) emitOne(cx, cy, -i * stagger);
   }
 
   function update(dt, mouse) {
     if (count === 0) return;
-    const { stiffness, damping, repelRadius, repelStrength, maxSpeed } = PHYSICS;
+    const {
+      stiffness, damping, repelRadius, repelStrength, maxSpeed,
+      rippleSpeed, rippleWidth, rippleStrength, rippleLifetime,
+      pulseDecayRate,
+    } = PHYSICS;
     const repelR2 = repelRadius * repelRadius;
     const mActive = mouse && mouse.active;
     const mx = mActive ? mouse.x : 0;
     const my = mActive ? mouse.y : 0;
     const dtClamped = Math.min(dt, 1 / 30); // avoid huge steps after tab-hide
     const maxSpeed2 = maxSpeed * maxSpeed;
+    const invRippleWidth = 1 / rippleWidth;
+    const pulseDecay = Math.exp(-pulseDecayRate * dtClamped);
+    const glyphMax = atlasGlyphCount - 1;
+    let frameMaxPulse = 0;
+
+    // advance ripples & snapshot active ones into the flat scratch buffer
+    activeRippleCount = 0;
+    for (let i = 0; i < MAX_RIPPLES; i++) {
+      const r = ripples[i];
+      if (!r.active) continue;
+      r.age += dtClamped;
+      if (r.age < 0) continue;                              // still delayed
+      if (r.age >= rippleLifetime) { r.active = false; continue; }
+      const off = activeRippleCount * 4;
+      rippleScratch[off]     = r.cx;
+      rippleScratch[off + 1] = r.cy;
+      rippleScratch[off + 2] = r.age * rippleSpeed;         // radius
+      const t = r.age / rippleLifetime;                     // 0..1
+      rippleScratch[off + 3] = (1 - t) * (1 - t);           // intensity (ease-out)
+      activeRippleCount++;
+    }
 
     for (let i = 0; i < count; i++) {
       const ix = i * 2;
@@ -197,10 +257,11 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
       fx -= damping * vx;
       fy -= damping * vy;
 
+      const px = homes[ix] + ox;
+      const py = homes[iy] + oy;
+
       // mouse repel — distance from current world pos to cursor pos
       if (mActive) {
-        const px = homes[ix] + ox;
-        const py = homes[iy] + oy;
         const dx = px - mx;
         const dy = py - my;
         const d2 = dx * dx + dy * dy;
@@ -212,6 +273,36 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
           fy += (dy / d) * f;
         }
       }
+
+      // ripple pulses — Gaussian band centered on the expanding ring crest.
+      // Particles in the band (a) get a small outward nudge so the ring has
+      // motion, and (b) accumulate excitation so they brighten & swap to
+      // denser glyphs — making the pulse itself visible *as ASCII*.
+      let particlePulse = pulses[i] * pulseDecay;
+      for (let k = 0; k < activeRippleCount; k++) {
+        const ko = k * 4;
+        const dx = px - rippleScratch[ko];
+        const dy = py - rippleScratch[ko + 1];
+        const radius = rippleScratch[ko + 2];
+        const intensity = rippleScratch[ko + 3];
+        const d2 = dx * dx + dy * dy;
+        if (d2 < 1e-6) continue;
+        const d = Math.sqrt(d2);
+        const offN = (d - radius) * invRippleWidth;
+        if (offN > 3 || offN < -3) continue;                // outside Gaussian tail
+        const band = Math.exp(-offN * offN);
+        const exc = band * intensity;
+        if (exc > particlePulse) particlePulse = exc;
+        const f = rippleStrength * band * intensity;
+        fx += (dx / d) * f;
+        fy += (dy / d) * f;
+      }
+      pulses[i] = particlePulse;
+      if (particlePulse > frameMaxPulse) frameMaxPulse = particlePulse;
+      // swap glyph toward the densest end of the ramp as excitation rises
+      const base = glyphsBase[i];
+      const headroom = glyphMax - base;
+      glyphs[i] = base + Math.round(particlePulse * headroom);
 
       // integrate
       vx += fx * dtClamped;
@@ -232,6 +323,38 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
     }
 
     aOffset.needsUpdate = true;
+
+    // upload glyph/pulse changes only while the field is excited (or one
+    // final time to flush the resting state back to the GPU)
+    const nowPulsing = frameMaxPulse > 0.005;
+    if (nowPulsing || pulseDirty) {
+      aGlyph.needsUpdate = true;
+      aPulse.needsUpdate = true;
+    }
+    pulseDirty = nowPulsing;
+  }
+
+  /** Fill a pre-allocated array of THREE.Vector4 with active ripple state.
+   *  Inactive slots are zeroed (w=0). Used by the ring overlay shader. */
+  function getActiveRipples(out) {
+    for (let i = 0; i < MAX_RIPPLES; i++) {
+      const v = out[i];
+      if (i < activeRippleCount) {
+        const off = i * 4;
+        v.set(
+          rippleScratch[off],
+          rippleScratch[off + 1],
+          rippleScratch[off + 2],
+          rippleScratch[off + 3],
+        );
+      } else {
+        v.set(0, 0, 0, 0);
+      }
+    }
+  }
+
+  function getScale() {
+    return uniforms.uScale.value;
   }
 
   function dispose() {
@@ -253,7 +376,9 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
     setIntensity,
     resize,
     update,
-    burst,
+    pulse,
+    getActiveRipples,
+    getScale,
     dispose,
     getNormalizedMouse,
     get count() { return count; },

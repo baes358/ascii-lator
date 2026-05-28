@@ -3,6 +3,7 @@ attribute vec2 aHome;
 attribute vec2 aOffset;
 attribute vec3 aColor;
 attribute float aGlyph;
+attribute float aPulse;   // 0..1 ring-pulse excitation
 
 uniform float uQuadSize;   // world units per glyph quad
 uniform float uScale;      // normalized → world units
@@ -16,8 +17,10 @@ varying vec3 vColor;
 varying float vAlphaBoost;
 
 void main() {
+  // scale up the quad a touch while excited so the lit ring reads sharper
+  float quadScale = uQuadSize * (1.0 + aPulse * 0.25);
   vec2 homePx = (aHome + aOffset) * uScale;
-  vec2 worldPos = homePx + position.xy * uQuadSize;
+  vec2 worldPos = homePx + position.xy * quadScale;
 
   gl_Position = projectionMatrix * viewMatrix * vec4(worldPos, 0.0, 1.0);
 
@@ -41,9 +44,13 @@ void main() {
   } else {
     c = uAccent * (0.35 + 0.85 * lum);
   }
+
+  // ring-pulse: brighten + push toward accent so the band lights up as
+  // a clearly-readable arc of dense ASCII
+  c = c * (1.0 + aPulse * 1.4) + uAccent * (aPulse * 0.9);
   vColor = c;
 
-  // particles displaced from home glow slightly brighter
+  // displaced or excited particles glow brighter
   float disp = length(aOffset);
-  vAlphaBoost = clamp(disp * 0.6, 0.0, 0.5);
+  vAlphaBoost = clamp(disp * 0.4 + aPulse * 0.7, 0.0, 0.9);
 }
