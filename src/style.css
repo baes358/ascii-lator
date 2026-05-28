@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "Departure Mono";
+  src: url("/fonts/DepartureMono-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --bg: #050608;
   --bg-elev: rgba(14, 16, 20, 0.78);
@@ -7,6 +15,7 @@
   --fg-dim: #8a929a;
   --accent: #7cffb2;
   --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  --panel-font: "Departure Mono", ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
 }
 
 * {
@@ -72,6 +81,7 @@ html, body {
   text-align: center;
   letter-spacing: 0.08em;
   text-transform: lowercase;
+  font-family: var(--panel-font);
 }
 
 .drop-hint__title {
@@ -104,8 +114,14 @@ html, body {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   z-index: 20;
-  font-family: var(--mono);
+  font-family: var(--panel-font);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.panel input,
+.panel select,
+.panel button {
+  font-family: var(--panel-font);
 }
 
 .panel__head {
