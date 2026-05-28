@@ -26,7 +26,7 @@ panel.
 | color       | `original` samples photo color · `monochrome` uses luminance · `accent` tints by lum |
 | accent      | hex color used in accent mode                                    |
 | ramp        | the character set, ordered light → heavy                         |
-| morph       | **morph cycle** — loops the view between the original photo and the ASCII render. Each particle has its own reveal phase (bright pixels crystallize into glyphs first, dark ones last) and scales up from a tiny dot to full glyph as it appears, so the transition reads as a dissolve / crystallization, not a uniform opacity fade |
+| morph       | **morph cycle** — loops between the original photo and the ASCII render. Both layers share the same luminance-driven reveal: bright photo pixels burn out (with a brief accent-tinted flare) at the exact instant their counterpart ASCII glyphs crystallize in. The photo doesn't fade — it dissolves pixel-for-pixel into the field. Dark pixels and sparse glyphs come last |
 | cursor      | push particles away within `repelRadius`                         |
 | click / tap | emits concentric ring **pulses** — particles in the band light up (brighten + densest-glyph swap + small outward nudge) so the ring is visible *as ASCII*, then settle back |
 
@@ -79,6 +79,8 @@ All in `src/particleSystem.js` (`PHYSICS` export):
 | ripplePerClick | 2       | concentric pulses per click                        |
 | rippleStagger  | 0.14    | delay between concentric pulses                    |
 | pulseDecayRate | 3.2     | per-particle excitation half-life (~0.22s)         |
+| flickerRate    | 0.18    | flicker starts per particle per second (active fraction ≈ rate × avgDur) |
+| flickerMin/Max | 0.06/0.22 | duration window per flicker (sec)                |
 | scatterMin/Max | 1.6/3.2 | fly-in scatter shell                               |
 | maxSpeed       | 12.0    | velocity clamp to keep things stable               |
 

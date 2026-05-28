@@ -56,6 +56,10 @@ function applyCameraSize() {
 applyCameraSize();
 
 // --- atlas + particle system ---
+// First atlas may render with a sans-serif fallback if the Switzer font
+// hasn't finished loading yet — we trigger an async rebuild below the
+// moment fonts.ready resolves, then setAtlas() swaps the texture without
+// disturbing the particle field.
 atlas = buildAtlas(currentRamp, { cellSize: 18, dpr: 2 });
 const system = createSystem({
   atlas,
@@ -64,6 +68,20 @@ const system = createSystem({
 });
 system.setColorMode(currentColorMode, currentAccent);
 scene.add(system.mesh);
+
+function rebuildAtlas() {
+  const old = atlas;
+  atlas = buildAtlas(currentRamp, { cellSize: 18, dpr: 2 });
+  system.setAtlas(atlas);
+  if (old?.texture) old.texture.dispose();
+}
+
+if (document.fonts && typeof document.fonts.load === 'function') {
+  document.fonts
+    .load('800 32px "Switzer"')
+    .then(() => rebuildAtlas())
+    .catch(() => {});
+}
 
 // --- background photo plane (only visible during cycle mode) ---
 const background = createPhotoBackground();
@@ -88,7 +106,8 @@ const controls = createControls({
       background.setOpacity(0);
       system.setMorph(1);
     } else {
-      // start the cycle from the photo side
+      // start cycle on the photo side — both photo and particles share uMorph
+      background.setMorph(0);
       background.setOpacity(1);
       system.setMorph(0);
     }
@@ -104,6 +123,7 @@ const controls = createControls({
   },
   onAccent: (hex) => {
     currentAccent = hex;
+    background.setAccent(hex);
     if (currentColorMode === COLOR_MODES.accent) {
       system.setColorMode(currentColorMode, hex);
     }
@@ -251,10 +271,12 @@ function frame(now) {
   if (morphCycle) {
     morphClock += dt;
     const m = morphValue(morphClock);
+    // photo + particles share the SAME morph progress and SAME phase
+    // formula — each photo pixel burns out at the same instant its
+    // counterpart glyph crystallizes in, so the two transitions stay
+    // pixel-aligned instead of just cross-fading
     system.setMorph(m);
-    // photo dims faster than the morph progresses so the late-revealing
-    // (dark) particles light up against a near-black background
-    background.setOpacity(1 - Math.min(1, m * 1.25));
+    background.setMorph(m);
   }
 
   system.update(dt, interaction.mouse);

@@ -18,6 +18,9 @@ export const PHYSICS = {
   ripplePerClick: 2,     // staggered concentric pulses per click
   rippleStagger: 0.14,   // delay between concentric pulses (sec)
   pulseDecayRate: 3.2,   // per-particle excitation half-life ≈ 0.22s
+  flickerRate: 0.18,     // flicker starts per particle per second (only when fully revealed)
+  flickerMin: 0.06,      // shortest flicker duration (sec)
+  flickerMax: 0.22,      // longest flicker duration (sec)
   scatterMin: 1.6,       // fly-in scatter inner radius
   scatterMax: 3.2,       // fly-in scatter outer radius
   maxSpeed: 12.0,        // velocity clamp
@@ -55,6 +58,8 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
   const glyphsBase = new Float32Array(maxParticles);    // glyph from image sample
   const pulses = new Float32Array(maxParticles);        // 0..1 excitation per particle
   const phases = new Float32Array(maxParticles);        // per-particle morph reveal phase
+  const flickerTTL = new Float32Array(maxParticles);    // seconds remaining in current flicker (0 = idle)
+  const flickerGlyph = new Float32Array(maxParticles);  // glyph to display during flicker
 
   const aHome = new THREE.InstancedBufferAttribute(homes, 2);
   const aOffset = new THREE.InstancedBufferAttribute(offsets, 2);
@@ -158,6 +163,7 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
         velocities[i * 2] = 0;
         velocities[i * 2 + 1] = 0;
         pulses[i] = 0;
+        flickerTTL[i] = 0;
       }
       aOffset.needsUpdate = true;
       aPulse.needsUpdate = true;
@@ -236,6 +242,7 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
       stiffness, damping, repelRadius, repelStrength, maxSpeed,
       rippleSpeed, rippleWidth, rippleStrength, rippleLifetime,
       pulseDecayRate,
+      flickerRate, flickerMin, flickerMax,
     } = PHYSICS;
     const repelR2 = repelRadius * repelRadius;
     const mActive = mouse && mouse.active;
@@ -246,7 +253,16 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
     const invRippleWidth = 1 / rippleWidth;
     const pulseDecay = Math.exp(-pulseDecayRate * dtClamped);
     const glyphMax = atlasGlyphCount - 1;
+    const glyphCount = atlasGlyphCount;
     let frameMaxPulse = 0;
+    let anyFlicker = false;
+
+    // flicker only fires when the ASCII field is essentially fully revealed —
+    // mid-morph particles aren't supposed to be alive yet
+    const flickerChance = (uniforms.uMorph.value >= 0.99)
+      ? flickerRate * dtClamped
+      : 0;
+    const flickerSpan = flickerMax - flickerMin;
 
     // advance ripples & snapshot active ones into the flat scratch buffer
     activeRippleCount = 0;
@@ -324,10 +340,32 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
       }
       pulses[i] = particlePulse;
       if (particlePulse > frameMaxPulse) frameMaxPulse = particlePulse;
-      // swap glyph toward the densest end of the ramp as excitation rises
-      const base = glyphsBase[i];
-      const headroom = glyphMax - base;
-      glyphs[i] = base + Math.round(particlePulse * headroom);
+
+      // --- flicker: brief swap to a random glyph; gives the static field
+      // a live-terminal feel. Only ~flickerRate per particle per second
+      // when the ASCII is fully revealed. ---
+      let ttl = flickerTTL[i];
+      let flickering = ttl > 0;
+      if (flickering) {
+        ttl -= dtClamped;
+        if (ttl <= 0) { ttl = 0; flickering = false; }
+        flickerTTL[i] = ttl;
+      }
+      if (!flickering && flickerChance > 0 && Math.random() < flickerChance) {
+        flickerTTL[i] = flickerMin + Math.random() * flickerSpan;
+        flickerGlyph[i] = Math.floor(Math.random() * glyphCount);
+        flickering = true;
+      }
+      if (flickering) anyFlicker = true;
+
+      // glyph = flicker override > pulse-driven dense swap > base
+      if (flickering) {
+        glyphs[i] = flickerGlyph[i];
+      } else {
+        const base = glyphsBase[i];
+        const headroom = glyphMax - base;
+        glyphs[i] = base + Math.round(particlePulse * headroom);
+      }
 
       // integrate
       vx += fx * dtClamped;
@@ -349,14 +387,14 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
 
     aOffset.needsUpdate = true;
 
-    // upload glyph/pulse changes only while the field is excited (or one
-    // final time to flush the resting state back to the GPU)
-    const nowPulsing = frameMaxPulse > 0.005;
-    if (nowPulsing || pulseDirty) {
+    // upload glyph/pulse changes while the field is excited OR flickering
+    // (and one extra frame after activity dies to flush the resting state)
+    const nowActive = frameMaxPulse > 0.005 || anyFlicker;
+    if (nowActive || pulseDirty) {
       aGlyph.needsUpdate = true;
       aPulse.needsUpdate = true;
     }
-    pulseDirty = nowPulsing;
+    pulseDirty = nowActive;
   }
 
   /** Fill a pre-allocated array of THREE.Vector4 with active ripple state.

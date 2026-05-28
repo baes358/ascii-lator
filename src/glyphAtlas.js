@@ -22,7 +22,10 @@ export function buildAtlas(ramp, { cellSize = 16, dpr = 2, padding = 2 } = {}) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   const fontSize = Math.max(8, (cellSize - padding) * dpr);
-  ctx.font = `bold ${fontSize}px ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace`;
+  // Switzer is a proportional sans — each glyph is centered inside its
+  // (square) cell, so narrower characters just sit with more whitespace
+  // around them in the atlas.
+  ctx.font = `800 ${fontSize}px "Switzer", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ffffff';

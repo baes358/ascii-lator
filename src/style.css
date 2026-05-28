@@ -6,6 +6,14 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: "Switzer";
+  src: url("/fonts/Switzer-Variable.ttf") format("truetype-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block; /* block early — glyph atlas needs the real font, not a fallback */
+}
+
 :root {
   --bg: #050608;
   --bg-elev: rgba(14, 16, 20, 0.78);
