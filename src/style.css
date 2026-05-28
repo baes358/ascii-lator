@@ -130,6 +130,28 @@ html, body {
   justify-content: space-between;
   padding: 10px 14px;
   border-bottom: 1px solid var(--line);
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none; /* let pointer events drive the drag on touch screens */
+}
+
+.panel.is-dragging,
+.panel.is-dragging .panel__head {
+  cursor: grabbing;
+}
+
+.panel.is-dragging {
+  /* skip pointer events on the body while dragging so we never lose the gesture */
+  user-select: none;
+}
+
+.panel__title::before {
+  content: ":: ";
+  color: var(--fg-dim);
+  letter-spacing: -0.05em;
+  margin-right: 4px;
+  opacity: 0.7;
 }
 
 .panel__title {

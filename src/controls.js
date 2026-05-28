@@ -91,6 +91,8 @@ export function createControls(opts) {
     toggle.textContent = panel.classList.contains('is-collapsed') ? '+' : '_';
   });
 
+  setupPanelDrag(panel);
+
   function setAccentVisible(on) {
     accentWrap.classList.toggle('is-hidden', !on);
   }
@@ -110,6 +112,103 @@ export function createControls(opts) {
     getColorMode() { return colorModeIndex(colorSel.value); },
     getAccent() { return accent.value; },
   };
+}
+
+// --- draggable panel ---
+// Pointer Events unify mouse + touch + pen. `touch-action: none` on the
+// header (in CSS) stops mobile browsers from interpreting the drag as a
+// scroll or pull-to-refresh.
+const PANEL_POS_KEY = 'ascii-lator:panel-pos';
+const PANEL_MARGIN = 6;
+
+function setupPanelDrag(panel) {
+  const head = panel.querySelector('.panel__head');
+  let pid = null;
+  let startX = 0, startY = 0;
+  let startLeft = 0, startTop = 0;
+  let moved = false;
+
+  function clampInViewport(left, top) {
+    const w = panel.offsetWidth;
+    const h = panel.offsetHeight;
+    const m = PANEL_MARGIN;
+    return {
+      left: Math.max(m, Math.min(window.innerWidth - w - m, left)),
+      top: Math.max(m, Math.min(window.innerHeight - h - m, top)),
+    };
+  }
+
+  function applyPosition(left, top) {
+    panel.style.left = `${left}px`;
+    panel.style.top = `${top}px`;
+    panel.style.right = 'auto';
+  }
+
+  function onDown(e) {
+    // let the collapse toggle handle its own click cleanly
+    if (e.target.closest('.panel__toggle')) return;
+    pid = e.pointerId;
+    try { head.setPointerCapture(pid); } catch {}
+    const r = panel.getBoundingClientRect();
+    startLeft = r.left;
+    startTop = r.top;
+    startX = e.clientX;
+    startY = e.clientY;
+    moved = false;
+    // pin to left/top so subsequent moves have a single positioning origin
+    applyPosition(startLeft, startTop);
+    panel.classList.add('is-dragging');
+  }
+
+  function onMove(e) {
+    if (e.pointerId !== pid) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    if (!moved && (dx * dx + dy * dy) > 4) moved = true;
+    const { left, top } = clampInViewport(startLeft + dx, startTop + dy);
+    applyPosition(left, top);
+  }
+
+  function onUp(e) {
+    if (e.pointerId !== pid) return;
+    try { head.releasePointerCapture(pid); } catch {}
+    pid = null;
+    panel.classList.remove('is-dragging');
+    if (moved) {
+      try {
+        localStorage.setItem(PANEL_POS_KEY, JSON.stringify({
+          left: parseFloat(panel.style.left),
+          top: parseFloat(panel.style.top),
+        }));
+      } catch {}
+    }
+  }
+
+  head.addEventListener('pointerdown', onDown);
+  head.addEventListener('pointermove', onMove);
+  head.addEventListener('pointerup', onUp);
+  head.addEventListener('pointercancel', onUp);
+
+  // restore last saved position
+  try {
+    const saved = localStorage.getItem(PANEL_POS_KEY);
+    if (saved) {
+      const { left, top } = JSON.parse(saved);
+      const clamped = clampInViewport(left, top);
+      applyPosition(clamped.left, clamped.top);
+    }
+  } catch {}
+
+  // keep panel inside the viewport on resize / orientation change
+  window.addEventListener('resize', () => {
+    if (!panel.style.left) return;
+    const left = parseFloat(panel.style.left);
+    const top = parseFloat(panel.style.top);
+    const clamped = clampInViewport(left, top);
+    if (clamped.left !== left || clamped.top !== top) {
+      applyPosition(clamped.left, clamped.top);
+    }
+  });
 }
 
 function colorModeIndex(name) {
