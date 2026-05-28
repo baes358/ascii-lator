@@ -20,12 +20,12 @@ let currentColorMode = COLOR_MODES.original;
 let currentAccent = '#7CFFB2';
 let atlas = null;
 
-// --- cycle mode (photo ↔ ASCII cross-fade loop) ---
-let cycleMode = false;
-let cycleClock = 0; // seconds since cycle started
-const CYCLE = {
-  hold: 0.9,        // time held at each end (photo only / ascii only)
-  transition: 1.6,  // cross-fade duration each direction
+// --- morph cycle (photo ↔ ASCII per-particle reveal loop) ---
+let morphCycle = false;
+let morphClock = 0; // seconds since morph cycle started
+const MORPH = {
+  hold: 1.0,         // time held at each end (photo only / ascii only)
+  transition: 2.4,   // morph duration each direction (per-particle staggers internally)
 };
 
 // --- three.js setup ---
@@ -80,13 +80,17 @@ const controls = createControls({
   initialColorMode: currentColorMode,
   initialAccent: currentAccent,
   initialRamp: currentRamp,
-  initialCycle: cycleMode,
+  initialCycle: morphCycle,
   onCycle: (on) => {
-    cycleMode = on;
-    cycleClock = 0;
+    morphCycle = on;
+    morphClock = 0;
     if (!on) {
       background.setOpacity(0);
-      system.setOpacity(1);
+      system.setMorph(1);
+    } else {
+      // start the cycle from the photo side
+      background.setOpacity(1);
+      system.setMorph(0);
     }
   },
   onDensity: (n) => { currentDensity = n; resampleCurrent(); },
@@ -218,10 +222,10 @@ window.addEventListener('resize', () => {
   }, 60);
 });
 
-// --- cycle envelope: photo (0) → ASCII (1) → photo (0) → ... ---
-// segments: [hold-photo, fade-up, hold-ascii, fade-down], easing applied
-function cycleAsciiOpacity(t) {
-  const { hold, transition } = CYCLE;
+// --- morph envelope: photo (0) → ASCII (1) → photo (0) → ... ---
+// segments: [hold-photo, morph-up, hold-ascii, morph-down], smoothstep ease
+function morphValue(t) {
+  const { hold, transition } = MORPH;
   const period = (hold + transition) * 2;
   const phase = t % period;
   if (phase < hold) return 0;
@@ -244,11 +248,13 @@ function frame(now) {
   const dt = Math.min((now - last) / 1000, 1 / 30);
   last = now;
 
-  if (cycleMode) {
-    cycleClock += dt;
-    const ascii = cycleAsciiOpacity(cycleClock);
-    background.setOpacity(1 - ascii);
-    system.setOpacity(ascii);
+  if (morphCycle) {
+    morphClock += dt;
+    const m = morphValue(morphClock);
+    system.setMorph(m);
+    // photo dims faster than the morph progresses so the late-revealing
+    // (dark) particles light up against a near-black background
+    background.setOpacity(1 - Math.min(1, m * 1.25));
   }
 
   system.update(dt, interaction.mouse);

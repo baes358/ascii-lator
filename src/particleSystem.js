@@ -54,6 +54,7 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
   const glyphs = new Float32Array(maxParticles);        // current glyph (live)
   const glyphsBase = new Float32Array(maxParticles);    // glyph from image sample
   const pulses = new Float32Array(maxParticles);        // 0..1 excitation per particle
+  const phases = new Float32Array(maxParticles);        // per-particle morph reveal phase
 
   const aHome = new THREE.InstancedBufferAttribute(homes, 2);
   const aOffset = new THREE.InstancedBufferAttribute(offsets, 2);
@@ -63,12 +64,14 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
   aGlyph.setUsage(THREE.DynamicDrawUsage);
   const aPulse = new THREE.InstancedBufferAttribute(pulses, 1);
   aPulse.setUsage(THREE.DynamicDrawUsage);
+  const aPhase = new THREE.InstancedBufferAttribute(phases, 1);
 
   geometry.setAttribute('aHome', aHome);
   geometry.setAttribute('aOffset', aOffset);
   geometry.setAttribute('aColor', aColor);
   geometry.setAttribute('aGlyph', aGlyph);
   geometry.setAttribute('aPulse', aPulse);
+  geometry.setAttribute('aPhase', aPhase);
 
   // --- material ---
   const uniforms = {
@@ -77,10 +80,11 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
     uRows:      { value: atlas.rows },
     uQuadSize:  { value: 6.0 },
     uScale:     { value: 1.0 },
-    uColorMode: { value: 0.0 },
-    uAccent:    { value: new THREE.Color('#7CFFB2') },
-    uIntensity: { value: 1.05 },
-    uOpacity:   { value: 1.0 },
+    uColorMode:   { value: 0.0 },
+    uAccent:      { value: new THREE.Color('#7CFFB2') },
+    uIntensity:   { value: 1.05 },
+    uMorph:       { value: 1.0 },   // 0 = nothing revealed, 1 = full ASCII
+    uRevealBand:  { value: 0.4 },   // per-particle smoothstep width
   };
 
   const material = new THREE.ShaderMaterial({
@@ -130,6 +134,18 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
     glyphs.set(gridData.glyphs.subarray(0, n));
     glyphsBase.set(gridData.glyphs.subarray(0, n));
 
+    // morph reveal phase per particle: bright pixels crystallize into
+    // ASCII first, dark ones last, with random jitter for organic feel
+    const src = gridData.colors;
+    for (let i = 0; i < n; i++) {
+      const r = src[i * 3];
+      const g = src[i * 3 + 1];
+      const b = src[i * 3 + 2];
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      phases[i] = (1 - lum) * 0.4 + Math.random() * 0.2;
+    }
+    aPhase.needsUpdate = true;
+
     // re-scatter for fly-in unless the caller asks us to preserve motion
     // (e.g. brightness slider — only glyph indices changed)
     if (!keepMotion || n !== prevCount) {
@@ -171,8 +187,8 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
     uniforms.uIntensity.value = v;
   }
 
-  function setOpacity(v) {
-    uniforms.uOpacity.value = v;
+  function setMorph(v) {
+    uniforms.uMorph.value = v;
   }
 
   function resize(v) {
@@ -383,7 +399,7 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
     setAtlas,
     setColorMode,
     setIntensity,
-    setOpacity,
+    setMorph,
     resize,
     update,
     pulse,
