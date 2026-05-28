@@ -10,10 +10,13 @@
  * as ordered light → heavy. This matches the spec's "dark bg, reversed ramp,
  * bright = dense glyphs".
  */
-export function sampleImage(image, { gridW, gridH, ramp }) {
+export function sampleImage(image, { gridW, gridH, ramp, brightness = 1.0 }) {
   const w = Math.max(1, Math.floor(gridW));
   const h = Math.max(1, Math.floor(gridH));
   const glyphCount = ramp.length;
+  // gamma applied to per-cell luminance: brightness > 1 lifts mids toward
+  // the dense end of the ramp; < 1 pushes them toward sparse.
+  const invGamma = 1 / Math.max(0.0001, brightness);
 
   const canvas = document.createElement('canvas');
   canvas.width = w;
@@ -46,9 +49,10 @@ export function sampleImage(image, { gridW, gridH, ramp }) {
       const g = pixels[p + 1] / 255;
       const b = pixels[p + 2] / 255;
       const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      const lumAdj = Math.pow(lum, invGamma);
 
       // brightness bucket — bright → dense glyph (high index)
-      let gi = Math.floor(lum * glyphCount);
+      let gi = Math.floor(lumAdj * glyphCount);
       if (gi >= glyphCount) gi = glyphCount - 1;
       if (gi < 0) gi = 0;
 

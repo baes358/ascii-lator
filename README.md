@@ -22,6 +22,7 @@ panel.
 | Control     | Effect                                                          |
 | ----------- | ---------------------------------------------------------------- |
 | density     | particle count (6k–30k). Recomputes the sampling grid live.     |
+| brightness  | gamma curve on luminance → glyph mapping. >1 pushes mid-tones toward the dense end of the ramp, <1 toward sparse. Glyphs swap in place (motion preserved). |
 | color       | `original` samples photo color · `monochrome` uses luminance · `accent` tints by lum |
 | accent      | hex color used in accent mode                                    |
 | ramp        | the character set, ordered light → heavy                         |

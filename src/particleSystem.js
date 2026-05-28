@@ -117,8 +117,9 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
     uniforms.uQuadSize.value = cellPx * 1.05;
   }
 
-  function setImage(gridData) {
+  function setImage(gridData, { keepMotion = false } = {}) {
     const n = Math.min(gridData.count, maxParticles);
+    const prevCount = count;
     count = n;
     aspect = gridData.aspect;
     gridW = gridData.gridW;
@@ -129,24 +130,27 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
     glyphs.set(gridData.glyphs.subarray(0, n));
     glyphsBase.set(gridData.glyphs.subarray(0, n));
 
-    // scatter initial offsets so particles fly in
-    const { scatterMin, scatterMax } = PHYSICS;
-    for (let i = 0; i < n; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const r = scatterMin + Math.random() * (scatterMax - scatterMin);
-      offsets[i * 2] = Math.cos(a) * r;
-      offsets[i * 2 + 1] = Math.sin(a) * r;
-      velocities[i * 2] = 0;
-      velocities[i * 2 + 1] = 0;
-      pulses[i] = 0;
+    // re-scatter for fly-in unless the caller asks us to preserve motion
+    // (e.g. brightness slider — only glyph indices changed)
+    if (!keepMotion || n !== prevCount) {
+      const { scatterMin, scatterMax } = PHYSICS;
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = scatterMin + Math.random() * (scatterMax - scatterMin);
+        offsets[i * 2] = Math.cos(a) * r;
+        offsets[i * 2 + 1] = Math.sin(a) * r;
+        velocities[i * 2] = 0;
+        velocities[i * 2 + 1] = 0;
+        pulses[i] = 0;
+      }
+      aOffset.needsUpdate = true;
+      aPulse.needsUpdate = true;
     }
 
     geometry.instanceCount = n;
     aHome.needsUpdate = true;
     aColor.needsUpdate = true;
     aGlyph.needsUpdate = true;
-    aOffset.needsUpdate = true;
-    aPulse.needsUpdate = true;
 
     applyScale();
   }

@@ -15,6 +15,7 @@ const COLOR_MODES = { original: 0, mono: 1, accent: 2 };
 let currentImage = null;     // last decoded HTMLImageElement/Canvas
 let currentRamp = DEFAULT_RAMP;
 let currentDensity = 20000;
+let currentBrightness = 1.0;
 let currentColorMode = COLOR_MODES.original;
 let currentAccent = '#7CFFB2';
 let atlas = null;
@@ -75,6 +76,7 @@ const interaction = createInteraction(canvas, system);
 // --- controls ---
 const controls = createControls({
   initialDensity: currentDensity,
+  initialBrightness: currentBrightness,
   initialColorMode: currentColorMode,
   initialAccent: currentAccent,
   initialRamp: currentRamp,
@@ -88,6 +90,10 @@ const controls = createControls({
     }
   },
   onDensity: (n) => { currentDensity = n; resampleCurrent(); },
+  onBrightness: (b) => {
+    currentBrightness = b;
+    resampleCurrent({ keepMotion: true });
+  },
   onColorMode: (mode) => {
     currentColorMode = mode;
     system.setColorMode(mode, currentAccent);
@@ -156,12 +162,17 @@ function loadFile(file) {
   img.src = url;
 }
 
-function resampleCurrent() {
+function resampleCurrent({ keepMotion = false } = {}) {
   if (!currentImage) return;
   const aspect = currentImage.width / currentImage.height;
   const { gridW, gridH } = gridForTarget(currentDensity, aspect);
-  const data = sampleImage(currentImage, { gridW, gridH, ramp: currentRamp });
-  system.setImage(data);
+  const data = sampleImage(currentImage, {
+    gridW,
+    gridH,
+    ramp: currentRamp,
+    brightness: currentBrightness,
+  });
+  system.setImage(data, { keepMotion });
   controls.setCount(data.count);
 }
 

@@ -12,6 +12,8 @@
 export function createControls(opts) {
   const density = document.getElementById('ctl-density');
   const densityVal = document.getElementById('ctl-density-val');
+  const brightness = document.getElementById('ctl-brightness');
+  const brightnessVal = document.getElementById('ctl-brightness-val');
   const colorSel = document.getElementById('ctl-color');
   const accent = document.getElementById('ctl-accent');
   const accentWrap = document.getElementById('ctl-accent-wrap');
@@ -27,6 +29,8 @@ export function createControls(opts) {
   // initial values
   density.value = opts.initialDensity;
   densityVal.textContent = formatDensity(+density.value);
+  brightness.value = opts.initialBrightness;
+  brightnessVal.textContent = formatBrightness(+brightness.value);
   colorSel.value = colorModeName(opts.initialColorMode);
   accent.value = opts.initialAccent;
   setAccentVisible(opts.initialColorMode === 2);
@@ -41,6 +45,14 @@ export function createControls(opts) {
     densityVal.textContent = formatDensity(+density.value);
     clearTimeout(densityTimer);
     densityTimer = setTimeout(() => opts.onDensity(+density.value), 90);
+  });
+
+  // brightness re-samples glyph indices in place (no scatter)
+  let brightnessTimer = 0;
+  brightness.addEventListener('input', () => {
+    brightnessVal.textContent = formatBrightness(+brightness.value);
+    clearTimeout(brightnessTimer);
+    brightnessTimer = setTimeout(() => opts.onBrightness(+brightness.value), 40);
   });
 
   colorSel.addEventListener('change', () => {
@@ -85,6 +97,9 @@ export function createControls(opts) {
 
   function formatDensity(n) {
     return n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`;
+  }
+  function formatBrightness(n) {
+    return n.toFixed(2);
   }
 
   return {
