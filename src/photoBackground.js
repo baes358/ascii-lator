@@ -103,7 +103,13 @@ export function createPhotoBackground() {
   function setImage(image) {
     if (currentTexture) currentTexture.dispose();
     const tex = new THREE.Texture(image);
-    tex.colorSpace = THREE.SRGBColorSpace;
+    // Leave colorSpace as the default (NoColorSpace). The GPU samples the
+    // already-sRGB-encoded image pixels without converting them to linear,
+    // and our ShaderMaterial passes them straight through to the framebuffer
+    // — which the display also interprets as sRGB. If we tagged the texture
+    // as SRGBColorSpace, the GPU would linearize on sample but our custom
+    // fragment shader doesn't re-encode on output (three.js only auto-injects
+    // that for built-in materials), so the photo rendered ~2× too dark.
     tex.minFilter = THREE.LinearFilter;
     tex.magFilter = THREE.LinearFilter;
     tex.generateMipmaps = false;
