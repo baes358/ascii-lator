@@ -4,11 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
     <title>ascii-lator</title>
-    <script type="module" crossorigin src="/assets/index-BGy-Ku0H.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-COyTM-HP.css">
+    <script type="module" crossorigin src="/assets/index-CRoZX4wx.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CofOwVIW.css">
   </head>
   <body>
     <canvas id="stage"></canvas>
+
+    <!-- raw text mode: plain ASCII, monospace, fully selectable -->
+    <div id="raw-view" class="raw-view" aria-hidden="true">
+      <pre id="raw-ascii" class="raw-ascii"></pre>
+      <button id="raw-copy" class="raw-copy" type="button">copy</button>
+    </div>
 
     <div id="drop-hint" class="drop-hint">
       <div class="drop-hint__inner">
@@ -69,6 +75,11 @@
         <label class="ctl">
           <span class="ctl__label">morph</span>
           <button class="ctl__btn ctl__toggle" id="ctl-cycle" aria-pressed="false">off</button>
+        </label>
+
+        <label class="ctl">
+          <span class="ctl__label">raw</span>
+          <button class="ctl__btn ctl__toggle" id="ctl-raw" aria-pressed="false">off</button>
         </label>
 
         <div class="ctl ctl--readout">

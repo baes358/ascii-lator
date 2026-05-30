@@ -8,7 +8,16 @@ import * as THREE from 'three';
  *   buildAtlas(' .:-=+*#%@', { cellSize: 16, dpr: 2 })
  *     → { texture, cols, rows, glyphCount, cellSize, dpr }
  */
-export function buildAtlas(ramp, { cellSize = 16, dpr = 2, padding = 2 } = {}) {
+export function buildAtlas(
+  ramp,
+  {
+    cellSize = 16,
+    dpr = 2,
+    padding = 2,
+    fontWeight = '800',
+    fontFamily = '"Switzer", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif',
+  } = {},
+) {
   const glyphCount = ramp.length;
   const cols = Math.ceil(Math.sqrt(glyphCount));
   const rows = Math.ceil(glyphCount / cols);
@@ -22,10 +31,7 @@ export function buildAtlas(ramp, { cellSize = 16, dpr = 2, padding = 2 } = {}) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   const fontSize = Math.max(8, (cellSize - padding) * dpr);
-  // Switzer is a proportional sans — each glyph is centered inside its
-  // (square) cell, so narrower characters just sit with more whitespace
-  // around them in the atlas.
-  ctx.font = `800 ${fontSize}px "Switzer", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif`;
+  ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ffffff';

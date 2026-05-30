@@ -59,6 +59,64 @@ html, body {
     );
 }
 
+/* ---- raw ascii text mode ---- */
+.raw-view {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 5; /* above canvas (1) and drop-hint (10 when active); below panel (20) */
+  display: none;
+  overflow: auto;
+  padding: 24px;
+}
+
+.raw-view.is-active {
+  display: block;
+}
+
+.raw-ascii {
+  margin: 0;
+  padding: 0;
+  font-family: "Departure Mono", ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: pre;
+  color: #e7ecee;
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+  text-rendering: geometricPrecision;
+}
+
+.raw-copy {
+  position: fixed;
+  bottom: 18px;
+  left: 18px;
+  z-index: 6;
+  font-family: var(--panel-font);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  padding: 8px 14px;
+  border-radius: 3px;
+  border: 1px solid var(--line-strong);
+  background: rgba(0, 0, 0, 0.65);
+  color: var(--fg);
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.raw-copy:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.raw-copy.is-copied {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
 /* ---- drop hint (visible until first image loaded) ---- */
 .drop-hint {
   position: fixed;

@@ -86,6 +86,17 @@ export function createControls(opts) {
     opts.onCycle(v);
   }
 
+  const rawBtn = document.getElementById('ctl-raw');
+  let rawOn = !!opts.initialRaw;
+  setRaw(rawOn);
+  rawBtn.addEventListener('click', () => setRaw(!rawOn));
+  function setRaw(v) {
+    rawOn = v;
+    rawBtn.textContent = v ? 'on' : 'off';
+    rawBtn.setAttribute('aria-pressed', v ? 'true' : 'false');
+    opts.onRaw(v);
+  }
+
   toggle.addEventListener('click', () => {
     panel.classList.toggle('is-collapsed');
     toggle.textContent = panel.classList.contains('is-collapsed') ? '+' : '_';

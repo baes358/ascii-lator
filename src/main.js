@@ -19,6 +19,8 @@ let currentBrightness = 1.0;
 let currentColorMode = COLOR_MODES.original;
 let currentAccent = '#7CFFB2';
 let atlas = null;
+let rawMode = false;
+let currentRawText = '';
 
 // --- morph cycle (photo ↔ ASCII per-particle reveal loop) ---
 let morphCycle = false;
@@ -28,8 +30,16 @@ const MORPH = {
   transition: 2.4,   // morph duration each direction (per-particle staggers internally)
 };
 
-// --- three.js setup ---
+// --- DOM lookups (need these in scope before createControls fires
+// initial-state callbacks like onRaw / onCycle that touch them) ---
 const canvas = document.getElementById('stage');
+const rawView = document.getElementById('raw-view');
+const rawPre = document.getElementById('raw-ascii');
+const rawCopyBtn = document.getElementById('raw-copy');
+const dropHint = document.getElementById('drop-hint');
+const fileInput = document.getElementById('file-input');
+
+// --- three.js setup ---
 const renderer = new THREE.WebGLRenderer({
   canvas,
   antialias: false,
@@ -56,10 +66,6 @@ function applyCameraSize() {
 applyCameraSize();
 
 // --- atlas + particle system ---
-// First atlas may render with a sans-serif fallback if the Switzer font
-// hasn't finished loading yet — we trigger an async rebuild below the
-// moment fonts.ready resolves, then setAtlas() swaps the texture without
-// disturbing the particle field.
 atlas = buildAtlas(currentRamp, { cellSize: 18, dpr: 2 });
 const system = createSystem({
   atlas,
@@ -77,10 +83,7 @@ function rebuildAtlas() {
 }
 
 if (document.fonts && typeof document.fonts.load === 'function') {
-  document.fonts
-    .load('800 32px "Switzer"')
-    .then(() => rebuildAtlas())
-    .catch(() => {});
+  document.fonts.load('800 32px "Switzer"').then(() => rebuildAtlas()).catch(() => {});
 }
 
 // --- background photo plane (only visible during cycle mode) ---
@@ -130,20 +133,15 @@ const controls = createControls({
   },
   onRamp: (ramp) => {
     currentRamp = ramp;
-    // dispose old atlas texture before swapping
-    const old = atlas;
-    atlas = buildAtlas(ramp, { cellSize: 18, dpr: 2 });
-    system.setAtlas(atlas);
-    if (old?.texture) old.texture.dispose();
+    rebuildAtlas();
     resampleCurrent();
   },
+  onRaw: (on) => setRawMode(on),
+  initialRaw: rawMode,
   onUpload: loadFile,
 });
 
 // --- file loading ---
-const dropHint = document.getElementById('drop-hint');
-const fileInput = document.getElementById('file-input');
-
 fileInput.addEventListener('change', () => {
   const f = fileInput.files && fileInput.files[0];
   if (f) loadFile(f);
@@ -198,7 +196,79 @@ function resampleCurrent({ keepMotion = false } = {}) {
   });
   system.setImage(data, { keepMotion });
   controls.setCount(data.count);
+  currentRawText = buildRawText(data, currentRamp);
+  if (rawMode) renderRawText();
 }
+
+// --- raw ASCII text mode (selectable, copy-pastable) ---
+function buildRawText(gridData, ramp) {
+  const { gridW, gridH, glyphs } = gridData;
+  const rows = new Array(gridH);
+  for (let y = 0; y < gridH; y++) {
+    const line = new Array(gridW);
+    const rowBase = y * gridW;
+    for (let x = 0; x < gridW; x++) {
+      const gi = glyphs[rowBase + x] | 0;
+      line[x] = ramp[gi] || ' ';
+    }
+    rows[y] = line.join('');
+  }
+  return rows.join('\n');
+}
+
+function fitRawSize(gridW, gridH) {
+  // Departure Mono cell ≈ 0.6em wide × 1em tall (line-height: 1).
+  // Fit the whole grid in the viewport with some breathing room.
+  const padding = 48; // matches .raw-view padding (24 each side)
+  const w = window.innerWidth - padding;
+  const h = window.innerHeight - padding;
+  const byW = w / (gridW * 0.6);
+  const byH = h / gridH;
+  return Math.max(4, Math.floor(Math.min(byW, byH) * 0.98));
+}
+
+function renderRawText() {
+  // need a valid grid; pull it from the system's last sample
+  if (!currentImage || !currentRawText) {
+    rawPre.textContent = '';
+    return;
+  }
+  const aspect = currentImage.width / currentImage.height;
+  const { gridW, gridH } = gridForTarget(currentDensity, aspect);
+  const fs = fitRawSize(gridW, gridH);
+  rawPre.style.fontSize = `${fs}px`;
+  rawPre.style.lineHeight = '1';
+  rawPre.textContent = currentRawText;
+}
+
+function setRawMode(on) {
+  rawMode = on;
+  rawView.classList.toggle('is-active', on);
+  rawView.setAttribute('aria-hidden', on ? 'false' : 'true');
+  canvas.style.visibility = on ? 'hidden' : '';
+  if (on) renderRawText();
+}
+
+rawCopyBtn.addEventListener('click', async () => {
+  const text = currentRawText || rawPre.textContent || '';
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    // fallback: select all so the user can ⌘C
+    const sel = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(rawPre);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+  rawCopyBtn.textContent = 'copied';
+  rawCopyBtn.classList.add('is-copied');
+  setTimeout(() => {
+    rawCopyBtn.textContent = 'copy';
+    rawCopyBtn.classList.remove('is-copied');
+  }, 1200);
+});
 
 // --- initial demo image so visitors see the effect immediately ---
 function buildDemoImage() {
@@ -239,6 +309,7 @@ window.addEventListener('resize', () => {
     applyCameraSize();
     system.resize({ width: window.innerWidth, height: window.innerHeight });
     background.resize(window.innerWidth, window.innerHeight);
+    if (rawMode) renderRawText();
   }, 60);
 });
 
@@ -279,8 +350,12 @@ function frame(now) {
     background.setMorph(m);
   }
 
-  system.update(dt, interaction.mouse);
-  renderer.render(scene, camera);
+  // skip particle physics + render when raw text mode is active — the
+  // canvas is hidden anyway and the raw view is pure DOM
+  if (!rawMode) {
+    system.update(dt, interaction.mouse);
+    renderer.render(scene, camera);
+  }
 
   // fps readout (every ~0.5s)
   fpsAcc += dt; fpsFrames++;

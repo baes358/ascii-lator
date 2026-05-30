@@ -26,6 +26,7 @@ panel.
 | color       | `original` samples photo color · `monochrome` uses luminance · `accent` tints by lum |
 | accent      | hex color used in accent mode                                    |
 | ramp        | the character set, ordered light → heavy                         |
+| raw         | **raw ASCII text mode** — replaces the canvas with the photo rendered as plain selectable monospace text (Departure Mono). Auto-sizes to fit viewport. Click the **copy** button (bottom-left) or `⌘A` + `⌘C` to grab it. Particle physics is paused while raw mode is active |
 | morph       | **morph cycle** — loops between the original photo and the ASCII render. Both layers share the same luminance-driven reveal: bright photo pixels burn out (with a brief accent-tinted flare) at the exact instant their counterpart ASCII glyphs crystallize in. The photo doesn't fade — it dissolves pixel-for-pixel into the field. Dark pixels and sparse glyphs come last |
 | cursor      | push particles away within `repelRadius`                         |
 | click / tap | emits concentric ring **pulses** — particles in the band light up (brighten + densest-glyph swap + small outward nudge) so the ring is visible *as ASCII*, then settle back |
