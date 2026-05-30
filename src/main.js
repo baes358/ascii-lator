@@ -9,7 +9,7 @@ import { createControls } from './controls.js';
 const DEFAULT_RAMP = ' .:-=+*#%@';
 const MAX_PARTICLES = 30000;
 const MAX_DPR = 1.5;
-const COLOR_MODES = { original: 0, mono: 1, accent: 2 };
+const COLOR_MODES = { original: 0, monoLight: 1, monoDark: 2, accent: 3 };
 
 // Monospace character cells are ~0.6 wide × 1 tall in CSS units. The
 // visual canvas uses square per-glyph quads, but the raw text view stacks
@@ -132,6 +132,8 @@ const controls = createControls({
   onColorMode: (mode) => {
     currentColorMode = mode;
     system.setColorMode(mode, currentAccent);
+    // mono-dark uses a white canvas; everything else uses black
+    renderer.setClearColor(mode === COLOR_MODES.monoDark ? 0xffffff : 0x000000, 1);
   },
   onAccent: (hex) => {
     currentAccent = hex;

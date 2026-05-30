@@ -33,7 +33,7 @@ export function createControls(opts) {
   brightnessVal.textContent = formatBrightness(+brightness.value);
   colorSel.value = colorModeName(opts.initialColorMode);
   accent.value = opts.initialAccent;
-  setAccentVisible(opts.initialColorMode === 2);
+  setAccentVisible(opts.initialColorMode === 3);
   // initial ramp may or may not match an option; if not, leave default
   for (const o of rampSel.options) {
     if (o.value === opts.initialRamp) { rampSel.value = opts.initialRamp; break; }
@@ -57,7 +57,7 @@ export function createControls(opts) {
 
   colorSel.addEventListener('change', () => {
     const mode = colorModeIndex(colorSel.value);
-    setAccentVisible(mode === 2);
+    setAccentVisible(mode === 3);
     opts.onColorMode(mode);
   });
 
@@ -223,13 +223,15 @@ function setupPanelDrag(panel) {
 }
 
 function colorModeIndex(name) {
-  if (name === 'mono') return 1;
-  if (name === 'accent') return 2;
+  if (name === 'mono-light' || name === 'mono') return 1;
+  if (name === 'mono-dark') return 2;
+  if (name === 'accent') return 3;
   return 0;
 }
 
 function colorModeName(idx) {
-  if (idx === 1) return 'mono';
-  if (idx === 2) return 'accent';
+  if (idx === 1) return 'mono-light';
+  if (idx === 2) return 'mono-dark';
+  if (idx === 3) return 'accent';
   return 'original';
 }

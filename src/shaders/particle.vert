@@ -10,10 +10,12 @@ uniform float uQuadSize;   // world units per glyph quad
 uniform float uScale;      // normalized → world units
 uniform float uCols;       // atlas columns
 uniform float uRows;       // atlas rows
-uniform float uColorMode;  // 0 original · 1 mono · 2 accent
+uniform float uColorMode;  // 0 original · 1 mono-light · 2 mono-dark · 3 accent
 uniform vec3  uAccent;
 uniform float uMorph;      // 0 = no ASCII, 1 = full ASCII (cycle drives this)
 uniform float uRevealBand; // per-particle smoothstep width during morph
+uniform float uInvertRamp; // 1 in mono-dark — invert glyph index so bright photo = sparse glyph
+uniform float uGlyphMax;   // atlasGlyphCount - 1, needed for ramp inversion
 
 varying vec2 vAtlasUv;
 varying vec3 vColor;
@@ -34,9 +36,14 @@ void main() {
 
   gl_Position = projectionMatrix * viewMatrix * vec4(worldPos, 0.0, 1.0);
 
+  // mono-dark inverts the ramp so bright photo regions render as SPARSE
+  // glyphs (mostly white) and dark regions as DENSE glyphs (lots of black
+  // ink). Light/original/accent modes keep aGlyph as-is.
+  float effectiveGlyph = mix(aGlyph, uGlyphMax - aGlyph, uInvertRamp);
+
   // atlas UV — flipY=true on texture, so invert row direction
-  float col = mod(aGlyph, uCols);
-  float row = floor(aGlyph / uCols);
+  float col = mod(effectiveGlyph, uCols);
+  float row = floor(effectiveGlyph / uCols);
   float rowFromBottom = (uRows - 1.0) - row;
   vAtlasUv = vec2(
     (col + uv.x) / uCols,
@@ -48,11 +55,11 @@ void main() {
 
   vec3 c;
   if (uColorMode < 0.5) {
-    c = aColor;
-  } else if (uColorMode < 1.5) {
-    c = vec3(0.55 + 0.45 * lum);
+    c = aColor;                                  // 0 original
+  } else if (uColorMode < 2.5) {
+    c = vec3(0.55 + 0.45 * lum);                 // 1 mono-light / 2 mono-dark (frag overrides for dark)
   } else {
-    c = uAccent * (0.35 + 0.85 * lum);
+    c = uAccent * (0.35 + 0.85 * lum);           // 3 accent
   }
 
   // ring-pulse: brighten + push toward accent so the band lights up as

@@ -90,6 +90,8 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
     uIntensity:   { value: 1.05 },
     uMorph:       { value: 1.0 },   // 0 = nothing revealed, 1 = full ASCII
     uRevealBand:  { value: 0.4 },   // per-particle smoothstep width
+    uInvertRamp:  { value: 0.0 },   // 1 in mono-dark (bright photo → sparse glyph)
+    uGlyphMax:    { value: atlas.glyphCount - 1 },
   };
 
   const material = new THREE.ShaderMaterial({
@@ -181,12 +183,25 @@ export function createSystem({ atlas, maxParticles = 30000, viewport }) {
     uniforms.uAtlas.value = newAtlas.texture;
     uniforms.uCols.value = newAtlas.cols;
     uniforms.uRows.value = newAtlas.rows;
+    uniforms.uGlyphMax.value = newAtlas.glyphCount - 1;
     atlasGlyphCount = newAtlas.glyphCount;
   }
 
+  // 0 original · 1 mono-light · 2 mono-dark · 3 accent
+  // mono-dark swaps to MultiplyBlending so glyphs ink the white framebuffer
+  // toward black, and inverts the ramp so bright photo pixels map to sparse
+  // glyphs (= less ink = stays white). Other modes keep AdditiveBlending.
+  const MODE_MONO_DARK = 2;
   function setColorMode(mode, accentColor) {
     uniforms.uColorMode.value = mode;
     if (accentColor) uniforms.uAccent.value.set(accentColor);
+    const isDark = mode === MODE_MONO_DARK;
+    uniforms.uInvertRamp.value = isDark ? 1.0 : 0.0;
+    const nextBlending = isDark ? THREE.MultiplyBlending : THREE.AdditiveBlending;
+    if (material.blending !== nextBlending) {
+      material.blending = nextBlending;
+      material.needsUpdate = true;
+    }
   }
 
   function setIntensity(v) {
