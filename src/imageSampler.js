@@ -14,9 +14,6 @@ export function sampleImage(image, { gridW, gridH, ramp, brightness = 1.0 }) {
   const w = Math.max(1, Math.floor(gridW));
   const h = Math.max(1, Math.floor(gridH));
   const glyphCount = ramp.length;
-  // gamma applied to per-cell luminance: brightness > 1 lifts mids toward
-  // the dense end of the ramp; < 1 pushes them toward sparse.
-  const invGamma = 1 / Math.max(0.0001, brightness);
 
   const canvas = document.createElement('canvas');
   canvas.width = w;
@@ -33,6 +30,32 @@ export function sampleImage(image, { gridW, gridH, ramp, brightness = 1.0 }) {
   const homes = new Float32Array(count * 2);
   const colors = new Float32Array(count * 3);
   const glyphs = new Float32Array(count);
+  const lums = new Float32Array(count); // cached for the second pass
+
+  // --- pass 1: compute per-cell luminance and mean for auto-exposure ---
+  let sumLum = 0;
+  for (let i = 0; i < count; i++) {
+    const p = i * 4;
+    const r = pixels[p] / 255;
+    const g = pixels[p + 1] / 255;
+    const b = pixels[p + 2] / 255;
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    lums[i] = lum;
+    sumLum += lum;
+  }
+  const meanLum = sumLum / count;
+
+  // Auto-exposure via gamma — solve pow(meanLum, autoGamma) = TARGET_MEAN
+  // so the photo's mean tone lands at a readable mid-density on the ramp.
+  // Clamped so flat / blown-out photos don't get crushed or over-cooked.
+  const TARGET_MEAN = 0.5;
+  let autoGamma = Math.log(TARGET_MEAN) / Math.log(Math.max(0.02, meanLum));
+  if (autoGamma < 0.4) autoGamma = 0.4;
+  if (autoGamma > 1.4) autoGamma = 1.4;
+
+  // User brightness slider rides ON TOP of auto-exposure (multiplicative
+  // on the exponent). brightness=1 → auto baseline; >1 → lift further; <1 → darken.
+  const exp = autoGamma / Math.max(0.01, brightness);
 
   // Build per-cell positions in a centered, aspect-preserving coordinate
   // space ranging roughly [-1, 1] on the longer axis. The particle system
@@ -41,6 +64,7 @@ export function sampleImage(image, { gridW, gridH, ramp, brightness = 1.0 }) {
   const halfW = aspect >= 1 ? 1 : aspect;
   const halfH = aspect >= 1 ? 1 / aspect : 1;
 
+  // --- pass 2: position + color + glyph index ---
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
@@ -48,8 +72,7 @@ export function sampleImage(image, { gridW, gridH, ramp, brightness = 1.0 }) {
       const r = pixels[p] / 255;
       const g = pixels[p + 1] / 255;
       const b = pixels[p + 2] / 255;
-      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-      const lumAdj = Math.pow(lum, invGamma);
+      const lumAdj = Math.pow(lums[i], exp);
 
       // brightness bucket — bright → dense glyph (high index)
       let gi = Math.floor(lumAdj * glyphCount);

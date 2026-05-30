@@ -11,6 +11,13 @@ const MAX_PARTICLES = 30000;
 const MAX_DPR = 1.5;
 const COLOR_MODES = { original: 0, mono: 1, accent: 2 };
 
+// Monospace character cells are ~0.6 wide × 1 tall in CSS units. The
+// visual canvas uses square per-glyph quads, but the raw text view stacks
+// rectangular character cells, so the same gridW × gridH would render as
+// a horizontally-squished block. Compensate by sampling the raw text with
+// a wider grid: rawW = gridW / MONO_CELL_RATIO.
+const MONO_CELL_RATIO = 0.6;
+
 // --- state ---
 let currentImage = null;     // last decoded HTMLImageElement/Canvas
 let currentRamp = DEFAULT_RAMP;
@@ -21,6 +28,8 @@ let currentAccent = '#7CFFB2';
 let atlas = null;
 let rawMode = false;
 let currentRawText = '';
+let currentRawGridW = 1;
+let currentRawGridH = 1;
 
 // --- morph cycle (photo ↔ ASCII per-particle reveal loop) ---
 let morphCycle = false;
@@ -196,8 +205,29 @@ function resampleCurrent({ keepMotion = false } = {}) {
   });
   system.setImage(data, { keepMotion });
   controls.setCount(data.count);
-  currentRawText = buildRawText(data, currentRamp);
+
+  // Raw text uses a separate, horizontally-wider sample so the resulting
+  // text block — laid out in rectangular monospace cells — keeps the
+  // photo's true aspect ratio (both on screen here and when pasted).
+  const rawGrid = gridForRawText(currentDensity, aspect);
+  const rawData = sampleImage(currentImage, {
+    gridW: rawGrid.gridW,
+    gridH: rawGrid.gridH,
+    ramp: currentRamp,
+    brightness: currentBrightness,
+  });
+  currentRawText = buildRawText(rawData, currentRamp);
+  currentRawGridW = rawGrid.gridW;
+  currentRawGridH = rawGrid.gridH;
   if (rawMode) renderRawText();
+}
+
+function gridForRawText(target, aspect) {
+  // Solve for w,h such that w*h ≈ target AND (w * MONO_CELL_RATIO)/h == aspect.
+  // → h = sqrt(target * MONO_CELL_RATIO / aspect); w = aspect * h / MONO_CELL_RATIO.
+  const h = Math.max(1, Math.round(Math.sqrt((target * MONO_CELL_RATIO) / aspect)));
+  const w = Math.max(1, Math.round((aspect * h) / MONO_CELL_RATIO));
+  return { gridW: w, gridH: h };
 }
 
 // --- raw ASCII text mode (selectable, copy-pastable) ---
@@ -217,25 +247,22 @@ function buildRawText(gridData, ramp) {
 }
 
 function fitRawSize(gridW, gridH) {
-  // Departure Mono cell ≈ 0.6em wide × 1em tall (line-height: 1).
-  // Fit the whole grid in the viewport with some breathing room.
+  // Departure Mono cell ≈ MONO_CELL_RATIO em wide × 1em tall (line-height: 1).
+  // Fit the whole grid in the viewport with a small margin.
   const padding = 48; // matches .raw-view padding (24 each side)
   const w = window.innerWidth - padding;
   const h = window.innerHeight - padding;
-  const byW = w / (gridW * 0.6);
+  const byW = w / (gridW * MONO_CELL_RATIO);
   const byH = h / gridH;
   return Math.max(4, Math.floor(Math.min(byW, byH) * 0.98));
 }
 
 function renderRawText() {
-  // need a valid grid; pull it from the system's last sample
   if (!currentImage || !currentRawText) {
     rawPre.textContent = '';
     return;
   }
-  const aspect = currentImage.width / currentImage.height;
-  const { gridW, gridH } = gridForTarget(currentDensity, aspect);
-  const fs = fitRawSize(gridW, gridH);
+  const fs = fitRawSize(currentRawGridW, currentRawGridH);
   rawPre.style.fontSize = `${fs}px`;
   rawPre.style.lineHeight = '1';
   rawPre.textContent = currentRawText;
@@ -249,19 +276,70 @@ function setRawMode(on) {
   if (on) renderRawText();
 }
 
+function escapeHtml(s) {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// Lightweight HTML payload — a single <pre> with inline monospace + tight
+// line-height. Total size ≈ text size + ~200 bytes overhead, so apps that
+// scan the clipboard (Messages, Mail) don't hang on the paste.
+//
+// For rich-text destinations that respect the inline styles (Slack code,
+// Notion, Discord code, GitHub, Bear, terminal pastebins) the figure renders
+// with the right proportions. Destinations that override line-height will
+// stretch the figure vertically — that's a known limitation of monospace
+// ASCII art, not something a heavier HTML payload reliably solves.
+function buildClipboardHtml(text) {
+  const styles = [
+    'font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, "Courier New", monospace',
+    'font-size: 11px',
+    'line-height: 1',
+    'letter-spacing: 0',
+    'white-space: pre',
+    'margin: 0',
+    'padding: 0',
+  ].join('; ');
+  return `<pre style="${styles}">${escapeHtml(text)}</pre>`;
+}
+
 rawCopyBtn.addEventListener('click', async () => {
   const text = currentRawText || rawPre.textContent || '';
   if (!text) return;
+
+  let copied = false;
+
+  // 1. Try rich-format clipboard so destination keeps mono + line-height: 1
   try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    // fallback: select all so the user can ⌘C
+    if (window.ClipboardItem && navigator.clipboard?.write) {
+      const item = new ClipboardItem({
+        'text/plain': new Blob([text], { type: 'text/plain' }),
+        'text/html':  new Blob([buildClipboardHtml(text)], { type: 'text/html' }),
+      });
+      await navigator.clipboard.write([item]);
+      copied = true;
+    }
+  } catch {}
+
+  // 2. Plain text fallback
+  if (!copied) {
+    try {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+    } catch {}
+  }
+
+  // 3. Last resort — select in the DOM so the user can ⌘C
+  if (!copied) {
     const sel = window.getSelection();
     const range = document.createRange();
     range.selectNodeContents(rawPre);
     sel.removeAllRanges();
     sel.addRange(range);
   }
+
   rawCopyBtn.textContent = 'copied';
   rawCopyBtn.classList.add('is-copied');
   setTimeout(() => {

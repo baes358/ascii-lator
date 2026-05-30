@@ -117,6 +117,18 @@ html, body {
   border-color: var(--accent);
 }
 
+.raw-hint {
+  position: fixed;
+  bottom: 22px;
+  left: 100px;
+  z-index: 6;
+  font-family: var(--panel-font);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--fg-dim);
+  pointer-events: none;
+}
+
 /* ---- drop hint (visible until first image loaded) ---- */
 .drop-hint {
   position: fixed;
