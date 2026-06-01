@@ -31,9 +31,8 @@
       </header>
       <div class="panel__body" id="panel-body">
         <label class="ctl">
-          <span class="ctl__label">density</span>
-          <input type="range" id="ctl-density" min="6000" max="30000" step="1000" value="20000" />
-          <span class="ctl__value" id="ctl-density-val">20k</span>
+          <span class="ctl__label">photo</span>
+          <button class="ctl__btn" id="ctl-upload">upload</button>
         </label>
 
         <label class="ctl">
@@ -43,19 +42,22 @@
         </label>
 
         <label class="ctl">
-          <span class="ctl__label">color</span>
-          <select id="ctl-color">
-            <option value="original">original</option>
-            <option value="mono-light">mono light</option>
-            <option value="mono-dark">mono dark</option>
-            <option value="accent">accent</option>
-          </select>
+          <span class="ctl__label">density</span>
+          <input type="range" id="ctl-density" min="6000" max="30000" step="1000" value="20000" />
+          <span class="ctl__value" id="ctl-density-val">20k</span>
         </label>
 
-        <label class="ctl ctl--accent" id="ctl-accent-wrap">
-          <span class="ctl__label">accent</span>
-          <input type="color" id="ctl-accent" value="#7CFFB2" />
-        </label>
+        <div class="ctl-readouts">
+          <div class="ctl ctl--readout">
+            <span class="ctl__label">particles</span>
+            <span class="ctl__value" id="ctl-count">0</span>
+          </div>
+
+          <div class="ctl ctl--readout">
+            <span class="ctl__label">fps</span>
+            <span class="ctl__value" id="ctl-fps">—</span>
+          </div>
+        </div>
 
         <label class="ctl">
           <span class="ctl__label">ramp</span>
@@ -69,8 +71,18 @@
         </label>
 
         <label class="ctl">
-          <span class="ctl__label">photo</span>
-          <button class="ctl__btn" id="ctl-upload">upload</button>
+          <span class="ctl__label">color</span>
+          <select id="ctl-color">
+            <option value="original">original</option>
+            <option value="mono-light">mono dark</option>
+            <option value="mono-dark">mono light</option>
+            <option value="accent">accent</option>
+          </select>
+        </label>
+
+        <label class="ctl ctl--accent" id="ctl-accent-wrap">
+          <span class="ctl__label">accent</span>
+          <input type="color" id="ctl-accent" value="#7CFFB2" />
         </label>
 
         <label class="ctl">
@@ -83,17 +95,7 @@
           <button class="ctl__btn ctl__toggle" id="ctl-raw" aria-pressed="false">off</button>
         </label>
 
-        <div class="ctl ctl--readout">
-          <span class="ctl__label">particles</span>
-          <span class="ctl__value" id="ctl-count">0</span>
-        </div>
-
-        <div class="ctl ctl--readout">
-          <span class="ctl__label">fps</span>
-          <span class="ctl__value" id="ctl-fps">—</span>
-        </div>
-
-        <div class="panel__hint">click to pulse · toggle <span style="color:var(--accent)">morph</span> for the photo-to-ascii cycle</div>
+        <div class="panel__hint">click to pulse<br />toggle <span style="color:var(--accent)">morph</span> for the photo-to-ascii cycle</div>
       </div>
     </aside>
 
